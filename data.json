@@ -1,73 +1,36 @@
 {
   "people": [
     {
-      "id": "mrkkg2zbxfsb5",
+      "id": "mrkkpty1bp16t",
       "name": "Alex Johnson"
     },
     {
-      "id": "mrkkg2zca2s2p",
+      "id": "mrkkpty1acqfv",
       "name": "Sam Rivera"
-    },
-    {
-      "id": "mrkkmemv689dd",
-      "name": "New Person"
-    },
-    {
-      "id": "mrkkmf1n9mxxq",
-      "name": "New Person"
-    },
-    {
-      "id": "mrkkmf5vqilrd",
-      "name": "New Person"
-    },
-    {
-      "id": "mrkkmf9lil6i4",
-      "name": "New Person"
     }
   ],
   "weeks": [
     {
-      "id": "mrkkg2zc3fyra"
+      "id": "mrkkpty1f0vmj"
     },
     {
-      "id": "mrkkg2zcz8gvt"
+      "id": "mrkkpty1t6avr"
     }
   ],
   "tasks": [
     {
-      "id": "mrkkg2zcflcnv",
+      "id": "mrkkpty11c4k3",
       "text": "Write Report"
     },
     {
-      "id": "mrkkg2zcr9tg4",
+      "id": "mrkkpty1q3kkg",
       "text": "Review Pull Requests"
+    },
+    {
+      "id": "mrkkqbsdnq4xd",
+      "text": "Task Three"
     }
   ],
-  "assignments": {
-    "mrkkg2zbxfsb5|mrkkg2zc3fyra": [
-      "mrkkg2zcflcnv"
-    ],
-    "mrkkg2zbxfsb5|mrkkg2zcz8gvt": [
-      "mrkkg2zcflcnv"
-    ],
-    "mrkkg2zca2s2p|mrkkg2zc3fyra": [
-      "mrkkg2zcflcnv"
-    ],
-    "mrkkg2zca2s2p|mrkkg2zcz8gvt": [
-      "mrkkg2zcflcnv"
-    ],
-    "mrkkmemv689dd|mrkkg2zc3fyra": [
-      "mrkkg2zcr9tg4"
-    ],
-    "mrkkmf1n9mxxq|mrkkg2zc3fyra": [
-      "mrkkg2zcr9tg4"
-    ],
-    "mrkkmf5vqilrd|mrkkg2zc3fyra": [
-      "mrkkg2zcr9tg4"
-    ],
-    "mrkkmf9lil6i4|mrkkg2zc3fyra": [
-      "mrkkg2zcr9tg4"
-    ]
-  },
+  "assignments": {},
   "theme": "dark"
 }
