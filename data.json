@@ -1,0 +1,16 @@
+{
+  "people": [
+    { "id": "seedA", "name": "Alex Johnson" },
+    { "id": "seedB", "name": "Sam Rivera" }
+  ],
+  "weeks": [
+    { "id": "seedW1" },
+    { "id": "seedW2" }
+  ],
+  "tasks": [
+    { "id": "seedT1", "text": "Write Report" },
+    { "id": "seedT2", "text": "Review Pull Requests" }
+  ],
+  "assignments": {},
+  "theme": "light"
+}

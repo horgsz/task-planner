@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Weekly Task Planner</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --panel-2: #f0f1f4;
+    --text: #1c2024;
+    --muted: #6b7280;
+    --border: #d9dce1;
+    --accent: #2563eb;
+    --accent-contrast: #ffffff;
+    --chip: #eef2ff;
+    --chip-text: #3730a3;
+    --chip-border: #c7d2fe;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+    --unassigned-bg: #fff7ed;
+    --unassigned-border: #fb923c;
+    --drop: #dbeafe;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  }
+  [data-theme="dark"] {
+    --bg: #0f1115;
+    --panel: #181b21;
+    --panel-2: #1f232b;
+    --text: #e6e8eb;
+    --muted: #9aa1ac;
+    --border: #2b303a;
+    --accent: #3b82f6;
+    --accent-contrast: #ffffff;
+    --chip: #1e293b;
+    --chip-text: #bfdbfe;
+    --chip-border: #334155;
+    --danger: #f87171;
+    --danger-bg: #3b1d1d;
+    --warn: #fbbf24;
+    --warn-bg: #3a2f12;
+    --unassigned-bg: #3a2a17;
+    --unassigned-border: #d97706;
+    --drop: #1e3a5f;
+    --shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  header.app-header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 20px;
+    padding: 20px;
+    align-items: start;
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 16px;
+  }
+  .panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 12px; }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 12px;
+    transition: filter .12s ease, background .12s ease;
+  }
+  button:hover { filter: brightness(1.05); }
+  button:active { filter: brightness(.95); }
+  button.primary { background: var(--accent); color: var(--accent-contrast); border-color: transparent; }
+  button.icon {
+    padding: 2px 7px; line-height: 1; border-radius: 6px; font-size: 13px;
+    background: transparent; color: var(--muted);
+  }
+  button.icon:hover { color: var(--danger); background: var(--danger-bg); }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+
+  /* Task list panel */
+  .task-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .task-input-row input {
+    flex: 1; min-width: 0;
+    font: inherit; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text);
+  }
+  .msg { min-height: 20px; font-size: 13px; margin-bottom: 10px; }
+  .msg.error { color: var(--danger); background: var(--danger-bg); padding: 8px 10px; border-radius: 8px; }
+  .msg.warn  { color: var(--warn);  background: var(--warn-bg);  padding: 8px 10px; border-radius: 8px; }
+
+  ul.task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  li.task-item {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--chip); color: var(--chip-text);
+    border: 1px solid var(--chip-border);
+    border-radius: 8px; padding: 7px 9px;
+    cursor: grab; user-select: none;
+  }
+  li.task-item:active { cursor: grabbing; }
+  li.task-item .grip { color: var(--muted); font-size: 12px; }
+  li.task-item .label { flex: 1; word-break: break-word; }
+  li.task-item.unassigned {
+    background: var(--unassigned-bg);
+    border-color: var(--unassigned-border);
+    border-style: dashed;
+  }
+  li.task-item.unassigned::after {
+    content: "unassigned";
+    font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--unassigned-border); font-weight: 700;
+  }
+  .empty-note { color: var(--muted); font-size: 13px; font-style: italic; }
+
+  /* Grid */
+  .grid-wrap { overflow-x: auto; }
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; }
+  table.grid th, table.grid td {
+    border: 1px solid var(--border);
+    padding: 0;
+    vertical-align: top;
+  }
+  table.grid thead th {
+    background: var(--panel-2);
+    position: sticky; top: 0;
+    min-width: 150px;
+    padding: 8px;
+    font-weight: 600;
+  }
+  table.grid thead th.corner { min-width: 170px; left: 0; z-index: 5; }
+  .week-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .week-head .wk-label { font-weight: 650; }
+
+  td.name-cell, th.corner {
+    background: var(--panel-2);
+    position: sticky; left: 0; z-index: 4;
+  }
+  .name-wrap { display: flex; align-items: center; gap: 6px; padding: 8px; }
+  .name-wrap input {
+    flex: 1; min-width: 0; font: inherit; font-weight: 600;
+    padding: 6px 8px; border: 1px solid transparent; border-radius: 6px;
+    background: transparent; color: var(--text);
+  }
+  .name-wrap input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+
+  td.drop-cell { min-width: 150px; height: 60px; padding: 6px; background: var(--panel); }
+  td.drop-cell.drag-over { background: var(--drop); outline: 2px dashed var(--accent); outline-offset: -3px; }
+  .cell-tasks { display: flex; flex-wrap: wrap; gap: 5px; min-height: 40px; align-content: flex-start; }
+  .cell-empty-hint { color: var(--muted); font-size: 12px; font-style: italic; align-self: center; }
+  .cell-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--chip); color: var(--chip-text);
+    border: 1px solid var(--chip-border); border-radius: 6px;
+    padding: 3px 6px; font-size: 12.5px;
+  }
+  .cell-chip button.icon { padding: 0 3px; font-size: 12px; }
+
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+
+  .toolbar .spacer { flex: 1 1 auto; }
+  button.secondary { background: var(--panel-2); }
+  button.danger { background: var(--danger); color: #fff; border-color: transparent; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 44px rgba(0,0,0,.4);
+    max-width: 460px; width: 100%; padding: 22px;
+  }
+  .modal h3 { margin: 0 0 12px; font-size: 17px; }
+  .modal .warn-box {
+    background: var(--warn-bg); color: var(--warn);
+    border: 1px solid var(--warn); border-radius: 8px;
+    padding: 10px 12px; font-size: 13.5px; margin-bottom: 14px;
+  }
+  .modal .summary {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 18px;
+  }
+  .modal .summary strong { color: var(--accent); }
+  .modal .modal-note { font-size: 13px; color: var(--muted); line-height: 1.55; margin: 0 0 18px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+  /* Sync banner + status */
+  .sync-banner {
+    display: none;
+    align-items: center; gap: 12px;
+    padding: 10px 20px;
+    background: var(--warn-bg); color: var(--warn);
+    border-bottom: 1px solid var(--warn);
+    font-size: 13.5px;
+  }
+  .sync-banner.open { display: flex; }
+  .sync-banner .grow { flex: 1 1 auto; }
+  .sync-banner button { border-color: var(--warn); }
+  .sync-status {
+    font-size: 12.5px; color: var(--muted);
+    align-self: center; margin-left: 4px; white-space: nowrap;
+  }
+  .sync-status.ok { color: #16a34a; }
+  .sync-status.err { color: var(--danger); }
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>🗓️ Weekly Task Planner</h1>
+    <button id="themeToggle" title="Toggle light / dark mode">🌙 Dark</button>
+  </header>
+
+  <div id="syncBanner" class="sync-banner" role="status" aria-live="polite">
+    <span class="grow" id="syncBannerText">Shared data is available.</span>
+    <button id="syncLoad" class="primary">Load shared…</button>
+    <button id="syncDismiss" class="secondary">Dismiss</button>
+  </div>
+
+  <div class="layout">
+    <!-- Task list -->
+    <aside class="panel" aria-label="Task list">
+      <h2>Tasks</h2>
+      <form id="taskForm" class="task-input-row" autocomplete="off">
+        <input id="taskInput" type="text" placeholder="Add a task…" aria-label="New task" />
+        <button type="submit" class="primary">Add</button>
+      </form>
+      <div id="taskMsg" class="msg" role="status" aria-live="polite"></div>
+      <ul id="taskList" class="task-list"></ul>
+      <p class="hint">Drag a task into any cell. Tasks stay in the list, so you can assign them to multiple weeks. Tasks not assigned anywhere are marked <em>unassigned</em>.</p>
+    </aside>
+
+    <!-- Grid -->
+    <main class="panel" aria-label="People and weeks grid">
+      <div class="toolbar">
+        <button id="addPerson" class="primary">+ Add person (row)</button>
+        <button id="addWeek" class="primary">+ Add week (column)</button>
+        <span class="spacer"></span>
+        <button id="saveRepoBtn" class="primary" title="Save current data to the shared data.json in your repo">💾 Save to repo</button>
+        <button id="loadSharedBtn" class="secondary" title="Reload the shared data.json from the repo">🔄 Load shared</button>
+        <button id="importBtn" class="secondary" title="Import data from a CSV or JSON file">⬆︎ Import</button>
+        <button id="exportBtn" class="secondary" title="Export current data to a CSV file">⬇︎ Export CSV</button>
+        <button id="exportJsonBtn" class="secondary" title="Export current data to a JSON file">⬇︎ Export JSON</button>
+        <span id="syncStatus" class="sync-status"></span>
+        <input id="fileInput" type="file" accept=".csv,.json,text/csv,application/json" hidden />
+      </div>
+      <div class="grid-wrap">
+        <table class="grid">
+          <thead id="gridHead"></thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Import confirmation modal -->
+  <div id="importModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+    <div class="modal">
+      <h3 id="importModalTitle">Import data</h3>
+      <div id="importSummary" class="summary"></div>
+      <p class="modal-note">
+        <strong>Merge</strong> keeps your current board and adds any new people, weeks and tasks
+        from the file, combining assignments.<br />
+        <strong>Overwrite</strong> replaces everything you have now — this can't be undone.
+      </p>
+      <div class="modal-actions">
+        <button id="importCancel" class="secondary">Cancel</button>
+        <button id="importMerge" class="primary">Merge with current</button>
+        <button id="importConfirm" class="danger">Overwrite everything</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  const STORE_KEY = "weeklyTaskPlanner.v1";
+  const SIMILARITY_THRESHOLD = 0.6; // soft-warning threshold
+  const SHARED_URL = "./data.json"; // shared source of truth committed to the repo
+  let hadLocalData = false;          // whether this browser already had saved data
+
+  // ---------- State ----------
+  let state = {
+    people: [],       // { id, name }
+    weeks: [],        // { id }  (label derived from position)
+    tasks: [],        // { id, text }
+    assignments: {},  // "personId|weekId" -> [taskId, ...]
+    theme: "light",
+  };
+
+  const uid = () =>
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  // ---------- Persistence ----------
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        hadLocalData = true;
+        const parsed = JSON.parse(raw);
+        state = Object.assign(state, parsed);
+        state.assignments = state.assignments || {};
+      }
+    } catch (e) {}
+    if (state.people.length === 0 && state.weeks.length === 0 && state.tasks.length === 0) {
+      seed();
+    }
+  }
+  function seed() {
+    state.people = [{ id: uid(), name: "Alex Johnson" }, { id: uid(), name: "Sam Rivera" }];
+    state.weeks = [{ id: uid() }, { id: uid() }];
+    state.tasks = [
+      { id: uid(), text: "Write Report" },
+      { id: uid(), text: "Review Pull Requests" },
+    ];
+  }
+
+  // ---------- Helpers ----------
+  function titleCase(str) {
+    return str
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+  const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      }
+    }
+    return dp[m][n];
+  }
+  function similarity(a, b) {
+    const maxLen = Math.max(a.length, b.length);
+    if (maxLen === 0) return 1;
+    return 1 - levenshtein(a, b) / maxLen;
+  }
+
+  const assignedTaskIds = () => {
+    const set = new Set();
+    Object.values(state.assignments).forEach((arr) => arr.forEach((id) => set.add(id)));
+    return set;
+  };
+
+  // ---------- Messages ----------
+  const msgEl = document.getElementById("taskMsg");
+  function showMsg(kind, text) {
+    msgEl.className = "msg" + (kind ? " " + kind : "");
+    msgEl.textContent = text || "";
+  }
+
+  // ---------- Task list rendering ----------
+  const taskListEl = document.getElementById("taskList");
+  function renderTasks() {
+    const assigned = assignedTaskIds();
+    taskListEl.innerHTML = "";
+    if (state.tasks.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty-note";
+      li.textContent = "No tasks yet. Add one above.";
+      taskListEl.appendChild(li);
+      return;
+    }
+    state.tasks.forEach((task) => {
+      const li = document.createElement("li");
+      li.className = "task-item" + (assigned.has(task.id) ? "" : " unassigned");
+      li.draggable = true;
+      li.dataset.taskId = task.id;
+
+      const grip = document.createElement("span");
+      grip.className = "grip";
+      grip.textContent = "⠿";
+
+      const label = document.createElement("span");
+      label.className = "label";
+      label.textContent = task.text;
+
+      const del = document.createElement("button");
+      del.className = "icon";
+      del.title = "Remove task";
+      del.textContent = "✕";
+      del.addEventListener("click", () => removeTask(task.id));
+
+      li.append(grip, label, del);
+      li.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", task.id);
+        e.dataTransfer.effectAllowed = "copy";
+      });
+      taskListEl.appendChild(li);
+    });
+  }
+
+  function addTask(rawText) {
+    const text = rawText.trim().replace(/\s+/g, " ");
+    if (!text) { showMsg("error", "Please type a task before adding."); return; }
+    const norm = normalize(text);
+
+    // Exact duplicate -> hard error, block.
+    const exact = state.tasks.find((t) => normalize(t.text) === norm);
+    if (exact) {
+      showMsg("error", `“${exact.text}” is already in the list. Duplicate tasks aren’t allowed.`);
+      return;
+    }
+
+    // Similar (but not exact) -> soft warning, still add.
+    let closest = null, closestScore = 0;
+    for (const t of state.tasks) {
+      const other = normalize(t.text);
+      let score = similarity(norm, other);
+      if (other.includes(norm) || norm.includes(other)) score = Math.max(score, 0.75);
+      if (score > closestScore) { closestScore = score; closest = t; }
+    }
+
+    state.tasks.push({ id: uid(), text: titleCase(text) });
+
+    if (closest && closestScore >= SIMILARITY_THRESHOLD) {
+      showMsg("warn", `Added, but heads up: this looks similar to “${closest.text}”.`);
+    } else {
+      showMsg("", "");
+    }
+    save();
+    renderTasks();
+  }
+
+  function removeTask(taskId) {
+    state.tasks = state.tasks.filter((t) => t.id !== taskId);
+    Object.keys(state.assignments).forEach((k) => {
+      state.assignments[k] = state.assignments[k].filter((id) => id !== taskId);
+      if (state.assignments[k].length === 0) delete state.assignments[k];
+    });
+    showMsg("", "");
+    save();
+    render();
+  }
+
+  // ---------- Grid rendering ----------
+  const headEl = document.getElementById("gridHead");
+  const bodyEl = document.getElementById("gridBody");
+
+  function taskById(id) { return state.tasks.find((t) => t.id === id); }
+
+  function renderGrid() {
+    // Header
+    headEl.innerHTML = "";
+    const headRow = document.createElement("tr");
+
+    const corner = document.createElement("th");
+    corner.className = "corner";
+    corner.textContent = "People \\ Weeks";
+    headRow.appendChild(corner);
+
+    state.weeks.forEach((week, idx) => {
+      const th = document.createElement("th");
+      const wrap = document.createElement("div");
+      wrap.className = "week-head";
+      const label = document.createElement("span");
+      label.className = "wk-label";
+      label.textContent = "Week " + (idx + 1);
+      const del = document.createElement("button");
+      del.className = "icon";
+      del.title = "Remove this week";
+      del.textContent = "✕";
+      del.addEventListener("click", () => removeWeek(week.id));
+      wrap.append(label, del);
+      th.appendChild(wrap);
+      headRow.appendChild(th);
+    });
+    headEl.appendChild(headRow);
+
+    // Body
+    bodyEl.innerHTML = "";
+    if (state.people.length === 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = state.weeks.length + 1;
+      td.style.padding = "16px";
+      td.innerHTML = '<span class="empty-note">No people yet. Click “Add person” to start.</span>';
+      tr.appendChild(td);
+      bodyEl.appendChild(tr);
+      return;
+    }
+
+    state.people.forEach((person) => {
+      const tr = document.createElement("tr");
+
+      // Name cell
+      const nameTd = document.createElement("td");
+      nameTd.className = "name-cell";
+      const nameWrap = document.createElement("div");
+      nameWrap.className = "name-wrap";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = person.name;
+      input.placeholder = "Name…";
+      input.addEventListener("blur", () => {
+        const formatted = titleCase(input.value);
+        person.name = formatted;
+        input.value = formatted;
+        save();
+      });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+      const delP = document.createElement("button");
+      delP.className = "icon";
+      delP.title = "Remove this person";
+      delP.textContent = "✕";
+      delP.addEventListener("click", () => removePerson(person.id));
+      nameWrap.append(input, delP);
+      nameTd.appendChild(nameWrap);
+      tr.appendChild(nameTd);
+
+      // Week cells
+      state.weeks.forEach((week) => {
+        const td = document.createElement("td");
+        td.className = "drop-cell";
+        const key = person.id + "|" + week.id;
+        const container = document.createElement("div");
+        container.className = "cell-tasks";
+
+        const ids = state.assignments[key] || [];
+        if (ids.length === 0) {
+          const hint = document.createElement("span");
+          hint.className = "cell-empty-hint";
+          hint.textContent = "drop here";
+          container.appendChild(hint);
+        } else {
+          ids.forEach((tid) => {
+            const t = taskById(tid);
+            if (!t) return;
+            const chip = document.createElement("span");
+            chip.className = "cell-chip";
+            const cl = document.createElement("span");
+            cl.textContent = t.text;
+            const rm = document.createElement("button");
+            rm.className = "icon";
+            rm.title = "Remove from cell";
+            rm.textContent = "✕";
+            rm.addEventListener("click", () => unassign(key, tid));
+            chip.append(cl, rm);
+            container.appendChild(chip);
+          });
+        }
+
+        td.appendChild(container);
+        td.addEventListener("dragover", (e) => { e.preventDefault(); td.classList.add("drag-over"); e.dataTransfer.dropEffect = "copy"; });
+        td.addEventListener("dragleave", () => td.classList.remove("drag-over"));
+        td.addEventListener("drop", (e) => {
+          e.preventDefault();
+          td.classList.remove("drag-over");
+          const taskId = e.dataTransfer.getData("text/plain");
+          if (taskId) assign(key, taskId);
+        });
+        tr.appendChild(td);
+      });
+
+      bodyEl.appendChild(tr);
+    });
+  }
+
+  // ---------- Mutations ----------
+  function assign(key, taskId) {
+    if (!taskById(taskId)) return;
+    if (!state.assignments[key]) state.assignments[key] = [];
+    if (!state.assignments[key].includes(taskId)) {
+      state.assignments[key].push(taskId);
+      save();
+      render();
+    }
+  }
+  function unassign(key, taskId) {
+    if (!state.assignments[key]) return;
+    state.assignments[key] = state.assignments[key].filter((id) => id !== taskId);
+    if (state.assignments[key].length === 0) delete state.assignments[key];
+    save();
+    render();
+  }
+  function addPerson() {
+    state.people.push({ id: uid(), name: "New Person" });
+    save();
+    renderGrid();
+  }
+  function removePerson(id) {
+    state.people = state.people.filter((p) => p.id !== id);
+    Object.keys(state.assignments).forEach((k) => { if (k.startsWith(id + "|")) delete state.assignments[k]; });
+    save();
+    render();
+  }
+  function addWeek() {
+    state.weeks.push({ id: uid() });
+    save();
+    renderGrid();
+  }
+  function removeWeek(id) {
+    state.weeks = state.weeks.filter((w) => w.id !== id);
+    Object.keys(state.assignments).forEach((k) => { if (k.endsWith("|" + id)) delete state.assignments[k]; });
+    save();
+    render();
+  }
+
+  // ---------- Theme ----------
+  const themeBtn = document.getElementById("themeToggle");
+  function applyTheme() {
+    document.documentElement.setAttribute("data-theme", state.theme);
+    themeBtn.textContent = state.theme === "dark" ? "☀️ Light" : "🌙 Dark";
+  }
+  themeBtn.addEventListener("click", () => {
+    state.theme = state.theme === "dark" ? "light" : "dark";
+    applyTheme();
+    save();
+  });
+
+  // ---------- CSV import / export ----------
+  function csvField(v) {
+    v = v == null ? "" : String(v);
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function toCSV(records) {
+    return records.map((r) => r.map(csvField).join(",")).join("\r\n");
+  }
+  function parseCSV(text) {
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
+    const records = [];
+    let field = "", record = [], i = 0, inQuotes = false;
+    const pushField = () => { record.push(field); field = ""; };
+    const pushRecord = () => { pushField(); records.push(record); record = []; };
+    while (i < text.length) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += c; i++; continue;
+      }
+      if (c === '"') { inQuotes = true; i++; continue; }
+      if (c === ",") { pushField(); i++; continue; }
+      if (c === "\r") { if (text[i + 1] === "\n") i++; pushRecord(); i++; continue; }
+      if (c === "\n") { pushRecord(); i++; continue; }
+      field += c; i++;
+    }
+    if (field !== "" || record.length > 0) pushRecord();
+    return records;
+  }
+
+  function buildExportRecords() {
+    const records = [["#TASKS"]];
+    state.tasks.forEach((t) => records.push([t.text]));
+    records.push(["#GRID"]);
+    records.push(["Name"].concat(state.weeks.map((_, i) => "Week " + (i + 1))));
+    state.people.forEach((p) => {
+      const row = [p.name];
+      state.weeks.forEach((w) => {
+        const ids = state.assignments[p.id + "|" + w.id] || [];
+        const texts = ids.map((id) => { const t = taskById(id); return t ? t.text : null; }).filter(Boolean);
+        row.push(texts.join("\n"));
+      });
+      records.push(row);
+    });
+    return records;
+  }
+
+  function download(content, filename, mime) {
+    const blob = new Blob([content], { type: mime + ";charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportCSV() {
+    download("\uFEFF" + toCSV(buildExportRecords()), "weekly-task-planner.csv", "text/csv");
+  }
+
+  function exportJSON() {
+    const data = {
+      people: state.people, weeks: state.weeks, tasks: state.tasks,
+      assignments: state.assignments, theme: state.theme,
+    };
+    download(JSON.stringify(data, null, 2), "weekly-task-planner.json", "application/json");
+  }
+
+  // Turn parsed CSV records into a candidate state (does not mutate current state).
+  function buildStateFromRecords(records) {
+    const rows = records.filter((r) => !(r.length === 1 && (r[0] == null || r[0].trim() === "")));
+    const marker = (r, name) => r.length && (r[0] || "").trim().toUpperCase() === name;
+
+    const taskTexts = [];
+    let gridStart = 0;
+    if (rows.length && marker(rows[0], "#TASKS")) {
+      let idx = 1;
+      while (idx < rows.length && !marker(rows[idx], "#GRID")) {
+        const txt = (rows[idx][0] || "").trim();
+        if (txt) taskTexts.push(txt);
+        idx++;
+      }
+      if (idx < rows.length) idx++; // skip #GRID marker
+      gridStart = idx;
+    }
+
+    const gridRows = rows.slice(gridStart);
+    const header = gridRows.length ? gridRows[0] : ["Name"];
+    const weekCount = Math.max(0, header.length - 1);
+
+    const newState = { people: [], weeks: [], tasks: [], assignments: {}, theme: state.theme };
+    const weekIds = [];
+    for (let i = 0; i < weekCount; i++) { const id = uid(); newState.weeks.push({ id }); weekIds.push(id); }
+
+    const taskByNorm = new Map();
+    const ensureTask = (text) => {
+      const clean = (text || "").trim().replace(/\s+/g, " ");
+      if (!clean) return null;
+      const norm = clean.toLowerCase();
+      if (taskByNorm.has(norm)) return taskByNorm.get(norm);
+      const id = uid();
+      newState.tasks.push({ id, text: clean });
+      taskByNorm.set(norm, id);
+      return id;
+    };
+    taskTexts.forEach(ensureTask);
+
+    for (let r = 1; r < gridRows.length; r++) {
+      const row = gridRows[r];
+      const name = (row[0] || "").trim();
+      const hasCells = row.slice(1).some((c) => c && c.trim());
+      if (!name && !hasCells) continue;
+      const pid = uid();
+      newState.people.push({ id: pid, name: titleCase(name || "Unnamed") });
+      for (let w = 0; w < weekCount; w++) {
+        const parts = String(row[w + 1] || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+        const ids = [];
+        parts.forEach((pt) => { const tid = ensureTask(pt); if (tid && !ids.includes(tid)) ids.push(tid); });
+        if (ids.length) newState.assignments[pid + "|" + weekIds[w]] = ids;
+      }
+    }
+    return newState;
+  }
+
+  // Turn a parsed JSON export into a clean candidate state (validates & remaps ids).
+  function buildStateFromJSON(obj) {
+    if (!obj || typeof obj !== "object") throw new Error("Not a valid export.");
+    const people = Array.isArray(obj.people) ? obj.people : [];
+    const weeks = Array.isArray(obj.weeks) ? obj.weeks : [];
+    const tasks = Array.isArray(obj.tasks) ? obj.tasks : [];
+    const assignments = obj.assignments && typeof obj.assignments === "object" ? obj.assignments : {};
+
+    const ns = { people: [], weeks: [], tasks: [], assignments: {}, theme: state.theme };
+    const idP = {}, idW = {}, idT = {};
+    people.forEach((p) => { const id = uid(); idP[p.id] = id; ns.people.push({ id, name: titleCase(String(p.name || "Unnamed")) }); });
+    weeks.forEach((w) => { const id = uid(); idW[w.id] = id; ns.weeks.push({ id }); });
+    const taskByNorm = new Map();
+    tasks.forEach((t) => {
+      const clean = String(t.text || "").trim().replace(/\s+/g, " ");
+      if (!clean) return;
+      const norm = clean.toLowerCase();
+      if (taskByNorm.has(norm)) { idT[t.id] = taskByNorm.get(norm); return; }
+      const id = uid(); idT[t.id] = id; ns.tasks.push({ id, text: clean }); taskByNorm.set(norm, id);
+    });
+    Object.keys(assignments).forEach((key) => {
+      const parts = key.split("|");
+      const np = idP[parts[0]], nw = idW[parts[1]];
+      if (!np || !nw) return;
+      const ids = [];
+      (assignments[key] || []).forEach((tid) => { const nt = idT[tid]; if (nt && !ids.includes(nt)) ids.push(nt); });
+      if (ids.length) ns.assignments[np + "|" + nw] = ids;
+    });
+    return ns;
+  }
+
+  // Merge an incoming candidate into the current state (non-destructive append).
+  // People match by name, tasks by text, weeks align by column position.
+  function mergeStates(cur, inc) {
+    const out = { theme: cur.theme, people: [], weeks: [], tasks: [], assignments: {} };
+    out.people = cur.people.map((p) => ({ id: p.id, name: p.name }));
+    out.weeks = cur.weeks.map((w) => ({ id: w.id }));
+    out.tasks = cur.tasks.map((t) => ({ id: t.id, text: t.text }));
+    Object.keys(cur.assignments).forEach((k) => { out.assignments[k] = cur.assignments[k].slice(); });
+
+    const taskByNorm = new Map();
+    out.tasks.forEach((t) => taskByNorm.set(normalize(t.text), t.id));
+    const ensureTask = (text) => {
+      const clean = String(text || "").trim().replace(/\s+/g, " ");
+      if (!clean) return null;
+      const norm = clean.toLowerCase();
+      if (taskByNorm.has(norm)) return taskByNorm.get(norm);
+      const id = uid(); out.tasks.push({ id, text: clean }); taskByNorm.set(norm, id); return id;
+    };
+    const personByName = new Map();
+    out.people.forEach((p) => personByName.set(normalize(p.name), p.id));
+    const ensurePerson = (name) => {
+      const clean = titleCase(name || "Unnamed");
+      const key = clean.toLowerCase();
+      if (personByName.has(key)) return personByName.get(key);
+      const id = uid(); out.people.push({ id, name: clean }); personByName.set(key, id); return id;
+    };
+    const weekIdAt = (i) => { while (out.weeks.length <= i) out.weeks.push({ id: uid() }); return out.weeks[i].id; };
+
+    const incWeekIdx = new Map(); inc.weeks.forEach((w, i) => incWeekIdx.set(w.id, i));
+    const incTaskText = new Map(); inc.tasks.forEach((t) => incTaskText.set(t.id, t.text));
+    const incPersonName = new Map(); inc.people.forEach((p) => incPersonName.set(p.id, p.name));
+
+    inc.tasks.forEach((t) => ensureTask(t.text));       // keep unassigned incoming tasks
+    inc.people.forEach((p) => ensurePerson(p.name));     // keep people with empty rows
+    if (inc.weeks.length > 0) weekIdAt(inc.weeks.length - 1);
+
+    Object.keys(inc.assignments).forEach((key) => {
+      const parts = key.split("|");
+      const pName = incPersonName.get(parts[0]);
+      const wIdx = incWeekIdx.get(parts[1]);
+      if (pName == null || wIdx == null) return;
+      const outKey = ensurePerson(pName) + "|" + weekIdAt(wIdx);
+      const arr = out.assignments[outKey] || (out.assignments[outKey] = []);
+      (inc.assignments[key] || []).forEach((tid) => {
+        const text = incTaskText.get(tid);
+        if (text == null) return;
+        const nt = ensureTask(text);
+        if (nt && !arr.includes(nt)) arr.push(nt);
+      });
+      if (arr.length === 0) delete out.assignments[outKey];
+    });
+    return out;
+  }
+
+  // Import modal flow
+  let pendingImport = null;
+  const importModal = document.getElementById("importModal");
+  const importSummary = document.getElementById("importSummary");
+
+  function openImportModal(candidate, sourceLabel) {
+    pendingImport = candidate;
+    const assignedCount = Object.values(candidate.assignments).reduce((n, a) => n + a.length, 0);
+    importSummary.innerHTML =
+      (sourceLabel || "The file") + " contains <strong>" + candidate.people.length + "</strong> people, " +
+      "<strong>" + candidate.weeks.length + "</strong> weeks, " +
+      "<strong>" + candidate.tasks.length + "</strong> tasks and " +
+      "<strong>" + assignedCount + "</strong> cell assignments.";
+    importModal.classList.add("open");
+    document.getElementById("importConfirm").focus();
+  }
+  function closeImportModal() {
+    importModal.classList.remove("open");
+    pendingImport = null;
+  }
+  function handleImportFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result);
+      try {
+        const isJson = /\.json$/i.test(file.name || "") || /^\s*[{[]/.test(text);
+        const candidate = isJson
+          ? buildStateFromJSON(JSON.parse(text))
+          : buildStateFromRecords(parseCSV(text));
+        openImportModal(candidate);
+      } catch (err) {
+        showMsg("error", "Could not read that file. Expected a CSV or JSON export.");
+      }
+    };
+    reader.onerror = () => showMsg("error", "Could not read the file.");
+    reader.readAsText(file);
+  }
+
+  // ---------- Repo sync (GitHub Pages + data.json) ----------
+  // Canonical serialization used for saving and for change detection.
+  function serialize() {
+    return JSON.stringify(
+      { people: state.people, weeks: state.weeks, tasks: state.tasks, assignments: state.assignments, theme: state.theme },
+      null, 2
+    );
+  }
+  // Order-independent fingerprint of the shared content (ignores theme + internal ids).
+  function fingerprint(s) {
+    if (!s) return "";
+    const people = s.people.map((p) => normalize(p.name)).sort();
+    const weeks = s.weeks.length;
+    const tasks = s.tasks.map((t) => normalize(t.text)).sort();
+    const idToPersonName = {}, idToTaskText = {}, weekIndex = {};
+    s.people.forEach((p) => { idToPersonName[p.id] = normalize(p.name); });
+    s.tasks.forEach((t) => { idToTaskText[t.id] = normalize(t.text); });
+    s.weeks.forEach((w, i) => { weekIndex[w.id] = i; });
+    const assigns = [];
+    Object.keys(s.assignments || {}).forEach((k) => {
+      const [pid, wid] = k.split("|");
+      const pn = idToPersonName[pid]; const wi = weekIndex[wid];
+      if (pn == null || wi == null) return;
+      const texts = (s.assignments[k] || []).map((tid) => idToTaskText[tid]).filter(Boolean).sort();
+      texts.forEach((t) => assigns.push(pn + "|" + wi + "|" + t));
+    });
+    assigns.sort();
+    return JSON.stringify({ people, weeks, tasks, assigns });
+  }
+
+  const syncStatusEl = document.getElementById("syncStatus");
+  function setSyncStatus(kind, text) {
+    syncStatusEl.className = "sync-status" + (kind ? " " + kind : "");
+    syncStatusEl.textContent = text || "";
+  }
+
+  const syncBanner = document.getElementById("syncBanner");
+  let sharedCandidate = null; // last fetched shared state, kept for the banner's Load action
+  function showSyncBanner(text) {
+    document.getElementById("syncBannerText").textContent = text;
+    syncBanner.classList.add("open");
+  }
+  function hideSyncBanner() { syncBanner.classList.remove("open"); }
+
+  async function fetchShared() {
+    const res = await fetch(SHARED_URL + "?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return buildStateFromJSON(await res.json());
+  }
+
+  // On startup: adopt shared data for first-time visitors, otherwise offer to load if it differs.
+  async function checkShared() {
+    let incoming;
+    try { incoming = await fetchShared(); }
+    catch (e) { return; } // no data.json (e.g. brand-new repo) — silently skip
+    sharedCandidate = incoming;
+    if (!hadLocalData) {
+      // First visit on this browser: shared file is the source of truth.
+      state = incoming;
+      state.assignments = state.assignments || {};
+      save();
+      applyTheme();
+      render();
+      setSyncStatus("ok", "Loaded shared data");
+      return;
+    }
+    if (fingerprint(incoming) !== fingerprint(state)) {
+      showSyncBanner("The shared data.json differs from your local copy.");
+    } else {
+      setSyncStatus("ok", "Up to date with shared");
+    }
+  }
+
+  async function loadSharedInteractive() {
+    setSyncStatus("", "Loading…");
+    let incoming;
+    try { incoming = await fetchShared(); }
+    catch (e) { setSyncStatus("err", "No data.json found"); showMsg("error", "Couldn't load shared data.json from the repo."); return; }
+    sharedCandidate = incoming;
+    hideSyncBanner();
+    setSyncStatus("", "");
+    openImportModal(incoming, "The shared data.json");
+  }
+
+  // File System Access API handle (kept for the session so repeated saves reuse the file).
+  let repoFileHandle = null;
+  async function saveToRepo() {
+    const json = serialize();
+    if (window.showSaveFilePicker) {
+      try {
+        if (!repoFileHandle) {
+          repoFileHandle = await window.showSaveFilePicker({
+            suggestedName: "data.json",
+            types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+          });
+        }
+        const writable = await repoFileHandle.createWritable();
+        await writable.write(json);
+        await writable.close();
+        setSyncStatus("ok", "Saved to data.json — commit & push to share");
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") { setSyncStatus("", ""); return; }
+        // fall through to download fallback
+      }
+    }
+    download(json, "data.json", "application/json");
+    setSyncStatus("ok", "Downloaded data.json — move it into your repo, then commit & push");
+  }
+
+  // ---------- Top-level render ----------
+  function render() {
+    renderTasks();
+    renderGrid();
+  }
+
+  // ---------- Wire up ----------
+  document.getElementById("taskForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("taskInput");
+    addTask(input.value);
+    if (!msgEl.classList.contains("error")) input.value = "";
+    input.focus();
+  });
+  document.getElementById("addPerson").addEventListener("click", addPerson);
+  document.getElementById("addWeek").addEventListener("click", addWeek);
+
+  document.getElementById("exportBtn").addEventListener("click", exportCSV);
+  document.getElementById("exportJsonBtn").addEventListener("click", exportJSON);
+  const fileInput = document.getElementById("fileInput");
+  document.getElementById("importBtn").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) handleImportFile(file);
+    fileInput.value = ""; // allow re-selecting the same file
+  });
+  document.getElementById("importCancel").addEventListener("click", closeImportModal);
+  importModal.addEventListener("click", (e) => { if (e.target === importModal) closeImportModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && importModal.classList.contains("open")) closeImportModal();
+  });
+  function applyImport(newState) {
+    state = newState;
+    state.assignments = state.assignments || {};
+    closeImportModal();
+    showMsg("", "");
+    save();
+    applyTheme();
+    render();
+  }
+  document.getElementById("importConfirm").addEventListener("click", () => {
+    if (pendingImport) applyImport(pendingImport);
+  });
+  document.getElementById("importMerge").addEventListener("click", () => {
+    if (pendingImport) applyImport(mergeStates(state, pendingImport));
+  });
+
+  document.getElementById("saveRepoBtn").addEventListener("click", saveToRepo);
+  document.getElementById("loadSharedBtn").addEventListener("click", loadSharedInteractive);
+  document.getElementById("syncLoad").addEventListener("click", loadSharedInteractive);
+  document.getElementById("syncDismiss").addEventListener("click", () => {
+    hideSyncBanner();
+    setSyncStatus("", "");
+  });
+
+  // ---------- Init ----------
+  load();
+  applyTheme();
+  render();
+  checkShared();
+})();
+</script>
+</body>
+</html>
