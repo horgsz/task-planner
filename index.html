@@ -90,6 +90,33 @@
     padding: 16px;
   }
   .panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 12px; }
+  .panel-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .panel-head h2 { margin: 0; }
+  .info-tip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 17px; height: 17px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--muted);
+    font-family: Georgia, "Times New Roman", serif; font-size: 12px; font-style: italic; font-weight: 700;
+    cursor: help; position: relative; user-select: none;
+  }
+  .info-tip:hover, .info-tip:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+  .info-tip::after {
+    content: attr(data-tip);
+    position: absolute; top: 135%; left: 0;
+    width: 240px; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow);
+    padding: 8px 10px; font-size: 12px; font-style: normal; font-weight: 400;
+    line-height: 1.4; text-transform: none; letter-spacing: normal;
+    z-index: 50; opacity: 0; visibility: hidden; transition: opacity .12s ease;
+  }
+  .info-tip:hover::after, .info-tip:focus::after { opacity: 1; visibility: visible; }
+  kbd {
+    display: inline-block; font-family: inherit; font-size: 11px; line-height: 1;
+    padding: 2px 5px; margin-left: 6px; border-radius: 4px;
+    background: rgba(0,0,0,.18); border: 1px solid rgba(0,0,0,.15); color: inherit;
+    vertical-align: baseline;
+  }
+  button.secondary kbd, .app-header kbd { background: rgba(0,0,0,.12); }
 
   button {
     font: inherit;
@@ -124,7 +151,7 @@
   .msg.error { color: var(--danger); background: var(--danger-bg); padding: 8px 10px; border-radius: 8px; }
   .msg.warn  { color: var(--warn);  background: var(--warn-bg);  padding: 8px 10px; border-radius: 8px; }
 
-  ul.task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  ul.task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
   li.task-item {
     display: flex; align-items: center; gap: 8px;
     background: var(--chip); color: var(--chip-text);
@@ -162,7 +189,7 @@
     padding: 8px;
     font-weight: 600;
   }
-  table.grid thead th.corner { min-width: 170px; left: 0; z-index: 5; }
+  table.grid thead th.corner { min-width: auto; width: 1%; white-space: nowrap; left: 0; z-index: 5; }
   .week-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   .week-head .wk-label { font-weight: 650; }
 
@@ -170,9 +197,10 @@
     background: var(--panel-2);
     position: sticky; left: 0; z-index: 4;
   }
+  td.name-cell { width: 1%; white-space: nowrap; }
   .name-wrap { display: flex; align-items: center; gap: 6px; padding: 8px; }
   .name-wrap input {
-    flex: 1; min-width: 0; font: inherit; font-weight: 600;
+    flex: 0 0 auto; min-width: 0; font: inherit; font-weight: 600;
     padding: 6px 8px; border: 1px solid transparent; border-radius: 6px;
     background: transparent; color: var(--text);
   }
@@ -308,7 +336,7 @@
   <header class="app-header">
     <h1>🗓️ Weekly Task Planner</h1>
     <span class="spacer" style="flex:1"></span>
-    <button id="themeToggle" title="Toggle light / dark mode">🌙 Dark</button>
+    <button id="themeToggle" title="Toggle light / dark mode (D)"><span class="lbl">🌙 Dark</span><kbd>D</kbd></button>
     <button id="logoutBtn" class="secondary" title="Sign out">Sign out</button>
   </header>
 
@@ -321,23 +349,25 @@
   <div class="layout">
     <!-- Task list -->
     <aside class="panel" aria-label="Task list">
-      <h2>Tasks</h2>
+      <div class="panel-head">
+        <h2>Tasks</h2>
+        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Tasks stay in the list, so you can assign them to multiple weeks. Tasks not assigned anywhere are marked unassigned.">i</span>
+      </div>
       <form id="taskForm" class="task-input-row" autocomplete="off">
         <input id="taskInput" type="text" placeholder="Add a task…" aria-label="New task" />
-        <button type="submit" class="primary">Add</button>
+        <button type="submit" class="primary" title="Add task (press T to focus)">Add <kbd>T</kbd></button>
       </form>
       <div id="taskMsg" class="msg" role="status" aria-live="polite"></div>
       <ul id="taskList" class="task-list"></ul>
-      <p class="hint">Drag a task into any cell. Tasks stay in the list, so you can assign them to multiple weeks. Tasks not assigned anywhere are marked <em>unassigned</em>.</p>
     </aside>
 
     <!-- Grid -->
     <main class="panel" aria-label="People and weeks grid">
       <div class="toolbar">
-        <button id="addPerson" class="primary">+ Add person (row)</button>
-        <button id="addWeek" class="primary">+ Add week (column)</button>
+        <button id="addPerson" class="primary">+ Add person <kbd>P</kbd></button>
+        <button id="addWeek" class="primary">+ Add week <kbd>W</kbd></button>
         <span class="spacer"></span>
-        <button id="loadSharedBtn" class="secondary" title="Get the latest planner from the shared cloud database">🔄 Sync</button>
+        <button id="loadSharedBtn" class="secondary" title="Get the latest planner from the shared cloud database (S)">🔄 Sync <kbd>S</kbd></button>
         <button id="importBtn" class="secondary" title="Import data from a CSV or JSON file">⬆︎ Import</button>
         <button id="exportBtn" class="secondary" title="Export current data to a CSV file">⬇︎ Export CSV</button>
         <button id="exportJsonBtn" class="secondary" title="Export current data to a JSON file">⬇︎ Export JSON</button>
@@ -432,7 +462,7 @@
     return str
       .trim()
       .replace(/\s+/g, " ")
-      .replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+      .replace(/[^\s-]+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   }
   const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -566,7 +596,7 @@
 
     const corner = document.createElement("th");
     corner.className = "corner";
-    corner.textContent = "People \\ Weeks";
+    corner.textContent = "People";
     headRow.appendChild(corner);
 
     state.weeks.forEach((week, idx) => {
@@ -612,6 +642,8 @@
       input.type = "text";
       input.value = person.name;
       input.placeholder = "Name…";
+      input.size = Math.max(10, (person.name || "").length + 1);
+      input.addEventListener("input", () => { input.size = Math.max(10, input.value.length + 1); });
       input.addEventListener("blur", () => {
         const formatted = titleCase(input.value);
         person.name = formatted;
@@ -697,6 +729,9 @@
     state.people.push({ id: uid(), name: "New Person" });
     save();
     renderGrid();
+    const inputs = document.querySelectorAll("td.name-cell input");
+    const last = inputs[inputs.length - 1];
+    if (last) { last.focus(); last.select(); }
   }
   function removePerson(id) {
     state.people = state.people.filter((p) => p.id !== id);
@@ -720,7 +755,8 @@
   const themeBtn = document.getElementById("themeToggle");
   function applyTheme() {
     document.documentElement.setAttribute("data-theme", state.theme);
-    themeBtn.textContent = state.theme === "dark" ? "☀️ Light" : "🌙 Dark";
+    const lbl = themeBtn.querySelector(".lbl");
+    if (lbl) lbl.textContent = state.theme === "dark" ? "☀️ Light" : "🌙 Dark";
   }
   themeBtn.addEventListener("click", () => {
     state.theme = state.theme === "dark" ? "light" : "dark";
@@ -1052,8 +1088,8 @@
     setSyncStatus("", "Saving…");
     cloudTimer = setTimeout(() => {
       cloudSave()
-        .then(() => setSyncStatus("ok", "Saved to cloud"))
-        .catch((e) => { console.error(e); setSyncStatus("err", "Cloud save failed"); });
+        .then(() => setSyncStatus("ok", "Saved"))
+        .catch((e) => { console.error(e); setSyncStatus("err", "Save failed"); });
     }, 700);
   }
 
@@ -1068,13 +1104,13 @@
         try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
         applyTheme();
         render();
-        setSyncStatus("ok", "Loaded from cloud");
+        setSyncStatus("ok", "Up to date");
       } else {
-        setSyncStatus("ok", "No cloud data yet");
+        setSyncStatus("ok", "No data yet");
       }
     } catch (e) {
       console.error(e);
-      setSyncStatus("err", "Cloud load failed");
+      setSyncStatus("err", "Sync failed");
       showMsg("error", "Couldn't load from the cloud. Check your Supabase table/policies.");
     }
   }
@@ -1113,16 +1149,16 @@
         try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
         applyTheme();
         render();
-        setSyncStatus("ok", "Loaded from cloud");
+        setSyncStatus("ok", "Up to date");
       } else {
         // First run: seed the cloud row from whatever we have locally.
         await cloudSave();
-        setSyncStatus("ok", "Cloud initialized");
+        setSyncStatus("ok", "Ready");
       }
       cloudReady = true;
     } catch (e) {
       console.error(e);
-      setSyncStatus("err", "Cloud unavailable");
+      setSyncStatus("err", "Offline");
       showMsg("error", "Signed in, but couldn't reach the cloud table. Working locally only.");
     }
   }
@@ -1180,6 +1216,43 @@
   importModal.addEventListener("click", (e) => { if (e.target === importModal) closeImportModal(); });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && importModal.classList.contains("open")) closeImportModal();
+  });
+
+  // ---------- Global keyboard shortcuts ----------
+  function isTypingTarget(t) {
+    if (!t) return false;
+    const tag = t.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable;
+  }
+  document.addEventListener("keydown", (e) => {
+    // Ignore while signed out, typing in a field, using modifiers, or with a modal open.
+    if (authOverlay.classList.contains("open")) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isTypingTarget(e.target)) return;
+    if (importModal.classList.contains("open")) return;
+
+    switch (e.key.toLowerCase()) {
+      case "t":
+        e.preventDefault();
+        document.getElementById("taskInput").focus();
+        break;
+      case "p":
+        e.preventDefault();
+        addPerson();
+        break;
+      case "w":
+        e.preventDefault();
+        addWeek();
+        break;
+      case "s":
+        e.preventDefault();
+        reloadFromCloud();
+        break;
+      case "d":
+        e.preventDefault();
+        themeBtn.click();
+        break;
+    }
   });
   function applyImport(newState) {
     state = newState;
