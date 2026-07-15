@@ -611,7 +611,7 @@
   }
 
   function addTask(rawText) {
-    const text = rawText.trim().replace(/\s+/g, " ");
+    const text = rawText.trim();
     if (!text) { showMsg("error", "Please type a task before adding."); return; }
     const norm = normalize(text);
 
@@ -626,12 +626,11 @@
     let closest = null, closestScore = 0;
     for (const t of state.tasks) {
       const other = normalize(t.text);
-      let score = similarity(norm, other);
-      if (other.includes(norm) || norm.includes(other)) score = Math.max(score, 0.75);
+      const score = similarity(norm, other);
       if (score > closestScore) { closestScore = score; closest = t; }
     }
 
-    state.tasks.push({ id: uid(), text: titleCase(text) });
+    state.tasks.push({ id: uid(), text: text });
 
     if (closest && closestScore >= SIMILARITY_THRESHOLD) {
       showMsg("warn", `Added, but heads up: this looks similar to “${closest.text}”.`);
