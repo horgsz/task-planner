@@ -241,12 +241,75 @@
   }
   .sync-status.ok { color: #16a34a; }
   .sync-status.err { color: var(--danger); }
+
+  /* ---------- Login screen ---------- */
+  .auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1000;
+  }
+  .auth-overlay.open { display: flex; }
+  .auth-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 28px 26px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .auth-card h1 { margin: 0 0 4px; font-size: 22px; }
+  .auth-card p.sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .auth-card label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  .auth-card input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .auth-card button.primary { width: 100%; margin-top: 18px; padding: 11px; font-size: 15px; }
+  .auth-error {
+    margin-top: 14px;
+    color: var(--danger);
+    background: var(--danger-bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    display: none;
+  }
+  .auth-error.show { display: block; }
+  #logoutBtn { margin-left: 8px; }
+  .app-hidden { display: none !important; }
 </style>
 </head>
 <body>
+  <div id="authOverlay" class="auth-overlay open">
+    <form id="authCard" class="auth-card" autocomplete="on">
+      <h1>🗓️ Task Planner</h1>
+      <p class="sub">Sign in to view and edit the shared planner.</p>
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" required placeholder="you@example.com" autocomplete="username" />
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" required placeholder="••••••••" autocomplete="current-password" />
+      <button type="submit" class="primary" id="authSubmit">Sign in</button>
+      <div id="authError" class="auth-error"></div>
+    </form>
+  </div>
+
   <header class="app-header">
     <h1>🗓️ Weekly Task Planner</h1>
+    <span class="spacer" style="flex:1"></span>
     <button id="themeToggle" title="Toggle light / dark mode">🌙 Dark</button>
+    <button id="logoutBtn" class="secondary" title="Sign out">Sign out</button>
   </header>
 
   <div id="syncBanner" class="sync-banner" role="status" aria-live="polite">
@@ -274,8 +337,8 @@
         <button id="addPerson" class="primary">+ Add person (row)</button>
         <button id="addWeek" class="primary">+ Add week (column)</button>
         <span class="spacer"></span>
-        <button id="saveRepoBtn" class="primary" title="Save current data to the shared data.json in your repo">💾 Save to repo</button>
-        <button id="loadSharedBtn" class="secondary" title="Reload the shared data.json from the repo">🔄 Load shared</button>
+        <button id="saveRepoBtn" class="primary" title="Save the current planner to the shared cloud database">☁️ Save to cloud</button>
+        <button id="loadSharedBtn" class="secondary" title="Reload the planner from the shared cloud database">🔄 Reload cloud</button>
         <button id="importBtn" class="secondary" title="Import data from a CSV or JSON file">⬆︎ Import</button>
         <button id="exportBtn" class="secondary" title="Export current data to a CSV file">⬇︎ Export CSV</button>
         <button id="exportJsonBtn" class="secondary" title="Export current data to a JSON file">⬇︎ Export JSON</button>
@@ -309,13 +372,20 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
   "use strict";
 
+  // ---------- Supabase config ----------
+  const SUPABASE_URL = "https://lukpnjvmnguxyrhtwswj.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_iix0Kj_TmECfaK8uqAaWSA_H-HTEJZZ";
+  const SUPABASE_TABLE = "task-planner-state";
+  const CLOUD_ROW_ID = 1; // single shared row holding the whole planner
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
   const STORE_KEY = "weeklyTaskPlanner.v1";
   const SIMILARITY_THRESHOLD = 0.6; // soft-warning threshold
-  const SHARED_URL = "./data.json"; // shared source of truth committed to the repo
   let hadLocalData = false;          // whether this browser already had saved data
 
   // ---------- State ----------
@@ -333,6 +403,7 @@
   // ---------- Persistence ----------
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+    scheduleCloudSave();
   }
   function load() {
     try {
@@ -955,71 +1026,143 @@
   }
   function hideSyncBanner() { syncBanner.classList.remove("open"); }
 
-  async function fetchShared() {
-    const res = await fetch(SHARED_URL + "?t=" + Date.now(), { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return buildStateFromJSON(await res.json());
+  // ---------- Supabase cloud sync ----------
+  let cloudReady = false;       // becomes true after the first cloud reconcile
+  let cloudTimer = null;
+
+  async function cloudLoad() {
+    const { data, error } = await sb
+      .from(SUPABASE_TABLE)
+      .select("state_data")
+      .eq("id", CLOUD_ROW_ID)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? data.state_data : null;
   }
 
-  // On startup: adopt shared data for first-time visitors, otherwise offer to load if it differs.
-  async function checkShared() {
-    let incoming;
-    try { incoming = await fetchShared(); }
-    catch (e) { return; } // no data.json (e.g. brand-new repo) — silently skip
-    sharedCandidate = incoming;
-    if (!hadLocalData) {
-      // First visit on this browser: shared file is the source of truth.
-      state = incoming;
-      state.assignments = state.assignments || {};
-      save();
-      applyTheme();
-      render();
-      setSyncStatus("ok", "Loaded shared data");
-      return;
-    }
-    if (fingerprint(incoming) !== fingerprint(state)) {
-      showSyncBanner("The shared data.json differs from your local copy.");
-    } else {
-      setSyncStatus("ok", "Up to date with shared");
-    }
+  async function cloudSave() {
+    const { error } = await sb
+      .from(SUPABASE_TABLE)
+      .upsert({ id: CLOUD_ROW_ID, state_data: state }, { onConflict: "id" });
+    if (error) throw error;
   }
 
-  async function loadSharedInteractive() {
+  function scheduleCloudSave() {
+    if (!cloudReady) return;
+    clearTimeout(cloudTimer);
+    setSyncStatus("", "Saving…");
+    cloudTimer = setTimeout(() => {
+      cloudSave()
+        .then(() => setSyncStatus("ok", "Saved to cloud"))
+        .catch((e) => { console.error(e); setSyncStatus("err", "Cloud save failed"); });
+    }, 700);
+  }
+
+  // Pull the shared planner from Supabase and adopt it locally.
+  async function reloadFromCloud() {
     setSyncStatus("", "Loading…");
-    let incoming;
-    try { incoming = await fetchShared(); }
-    catch (e) { setSyncStatus("err", "No data.json found"); showMsg("error", "Couldn't load shared data.json from the repo."); return; }
-    sharedCandidate = incoming;
-    hideSyncBanner();
-    setSyncStatus("", "");
-    openImportModal(incoming, "The shared data.json");
+    try {
+      const cloud = await cloudLoad();
+      if (cloud) {
+        state = cloud;
+        state.assignments = state.assignments || {};
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        applyTheme();
+        render();
+        setSyncStatus("ok", "Loaded from cloud");
+      } else {
+        setSyncStatus("ok", "No cloud data yet");
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncStatus("err", "Cloud load failed");
+      showMsg("error", "Couldn't load from the cloud. Check your Supabase table/policies.");
+    }
   }
 
-  // File System Access API handle (kept for the session so repeated saves reuse the file).
-  let repoFileHandle = null;
-  async function saveToRepo() {
-    const json = serialize();
-    if (window.showSaveFilePicker) {
-      try {
-        if (!repoFileHandle) {
-          repoFileHandle = await window.showSaveFilePicker({
-            suggestedName: "data.json",
-            types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
-          });
-        }
-        const writable = await repoFileHandle.createWritable();
-        await writable.write(json);
-        await writable.close();
-        setSyncStatus("ok", "Saved to data.json — commit & push to share");
-        return;
-      } catch (e) {
-        if (e && e.name === "AbortError") { setSyncStatus("", ""); return; }
-        // fall through to download fallback
-      }
+  // Force-push current local state to the cloud (manual button).
+  async function saveToCloud() {
+    setSyncStatus("", "Saving…");
+    try {
+      await cloudSave();
+      setSyncStatus("ok", "Saved to cloud");
+    } catch (e) {
+      console.error(e);
+      setSyncStatus("err", "Cloud save failed");
+      showMsg("error", "Couldn't save to the cloud. Check your Supabase table/policies.");
     }
-    download(json, "data.json", "application/json");
-    setSyncStatus("ok", "Downloaded data.json — move it into your repo, then commit & push");
   }
+
+  // ---------- Authentication ----------
+  const authOverlay = document.getElementById("authOverlay");
+  const authErrorEl = document.getElementById("authError");
+
+  function showAuthError(msg) {
+    authErrorEl.textContent = msg;
+    authErrorEl.classList.add("show");
+  }
+  function clearAuthError() {
+    authErrorEl.textContent = "";
+    authErrorEl.classList.remove("show");
+  }
+  function showLogin() {
+    authOverlay.classList.add("open");
+  }
+  function hideLogin() {
+    authOverlay.classList.remove("open");
+    clearAuthError();
+  }
+
+  // Runs once the user is authenticated: load local cache, then reconcile with cloud.
+  async function startApp() {
+    hideLogin();
+    load();
+    applyTheme();
+    render();
+    try {
+      const cloud = await cloudLoad();
+      if (cloud) {
+        state = cloud;
+        state.assignments = state.assignments || {};
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        applyTheme();
+        render();
+        setSyncStatus("ok", "Loaded from cloud");
+      } else {
+        // First run: seed the cloud row from whatever we have locally.
+        await cloudSave();
+        setSyncStatus("ok", "Cloud initialized");
+      }
+      cloudReady = true;
+    } catch (e) {
+      console.error(e);
+      setSyncStatus("err", "Cloud unavailable");
+      showMsg("error", "Signed in, but couldn't reach the cloud table. Working locally only.");
+    }
+  }
+
+  document.getElementById("authCard").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearAuthError();
+    const email = document.getElementById("authEmail").value.trim();
+    const password = document.getElementById("authPassword").value;
+    const btn = document.getElementById("authSubmit");
+    btn.disabled = true;
+    btn.textContent = "Signing in…";
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    btn.disabled = false;
+    btn.textContent = "Sign in";
+    if (error) { showAuthError(error.message || "Sign in failed."); return; }
+    document.getElementById("authPassword").value = "";
+    startApp();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", async () => {
+    cloudReady = false;
+    await sb.auth.signOut();
+    showLogin();
+    setSyncStatus("", "");
+  });
 
   // ---------- Top-level render ----------
   function render() {
@@ -1068,19 +1211,24 @@
     if (pendingImport) applyImport(mergeStates(state, pendingImport));
   });
 
-  document.getElementById("saveRepoBtn").addEventListener("click", saveToRepo);
-  document.getElementById("loadSharedBtn").addEventListener("click", loadSharedInteractive);
-  document.getElementById("syncLoad").addEventListener("click", loadSharedInteractive);
+  document.getElementById("saveRepoBtn").addEventListener("click", saveToCloud);
+  document.getElementById("loadSharedBtn").addEventListener("click", reloadFromCloud);
+  document.getElementById("syncLoad").addEventListener("click", reloadFromCloud);
   document.getElementById("syncDismiss").addEventListener("click", () => {
     hideSyncBanner();
     setSyncStatus("", "");
   });
 
   // ---------- Init ----------
-  load();
-  applyTheme();
-  render();
-  checkShared();
+  // Show the app if there's already a valid session; otherwise the login screen stays up.
+  (async () => {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) {
+      startApp();
+    } else {
+      showLogin();
+    }
+  })();
 })();
 </script>
 </body>
