@@ -337,8 +337,7 @@
         <button id="addPerson" class="primary">+ Add person (row)</button>
         <button id="addWeek" class="primary">+ Add week (column)</button>
         <span class="spacer"></span>
-        <button id="saveRepoBtn" class="primary" title="Save the current planner to the shared cloud database">☁️ Save to cloud</button>
-        <button id="loadSharedBtn" class="secondary" title="Reload the planner from the shared cloud database">🔄 Reload cloud</button>
+        <button id="loadSharedBtn" class="secondary" title="Get the latest planner from the shared cloud database">🔄 Sync</button>
         <button id="importBtn" class="secondary" title="Import data from a CSV or JSON file">⬆︎ Import</button>
         <button id="exportBtn" class="secondary" title="Export current data to a CSV file">⬇︎ Export CSV</button>
         <button id="exportJsonBtn" class="secondary" title="Export current data to a JSON file">⬇︎ Export JSON</button>
@@ -1080,19 +1079,6 @@
     }
   }
 
-  // Force-push current local state to the cloud (manual button).
-  async function saveToCloud() {
-    setSyncStatus("", "Saving…");
-    try {
-      await cloudSave();
-      setSyncStatus("ok", "Saved to cloud");
-    } catch (e) {
-      console.error(e);
-      setSyncStatus("err", "Cloud save failed");
-      showMsg("error", "Couldn't save to the cloud. Check your Supabase table/policies.");
-    }
-  }
-
   // ---------- Authentication ----------
   const authOverlay = document.getElementById("authOverlay");
   const authErrorEl = document.getElementById("authError");
@@ -1211,7 +1197,6 @@
     if (pendingImport) applyImport(mergeStates(state, pendingImport));
   });
 
-  document.getElementById("saveRepoBtn").addEventListener("click", saveToCloud);
   document.getElementById("loadSharedBtn").addEventListener("click", reloadFromCloud);
   document.getElementById("syncLoad").addEventListener("click", reloadFromCloud);
   document.getElementById("syncDismiss").addEventListener("click", () => {
