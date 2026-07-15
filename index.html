@@ -214,14 +214,30 @@
   .cell-tasks { display: flex; flex-wrap: wrap; gap: 5px; min-height: 40px; align-content: flex-start; }
   .cell-empty-hint { color: var(--muted); font-size: 12px; font-style: italic; align-self: center; }
   .cell-chip {
-    display: inline-flex; align-items: center; gap: 5px;
+    display: inline-flex; align-items: center; gap: 4px;
     background: var(--chip); color: var(--chip-text);
-    border: 1px solid var(--chip-border); border-radius: 6px;
-    padding: 3px 6px; font-size: 12.5px;
+    border: 1px solid var(--chip-border); border-radius: 7px;
+    padding: 6px 10px; font-size: 14px; line-height: 1.2;
+    max-width: 100%;
   }
-  .cell-chip button.icon { padding: 0 3px; font-size: 12px; }
+  .cell-chip .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-chip .chip-actions {
+    display: inline-flex; align-items: center; gap: 1px;
+    max-width: 0; overflow: hidden; opacity: 0;
+    transition: max-width .14s ease, opacity .14s ease, margin-left .14s ease;
+    margin-left: 0;
+  }
+  .cell-chip:hover .chip-actions,
+  .cell-chip:focus-within .chip-actions {
+    max-width: 60px; opacity: 1; margin-left: 2px;
+  }
+  .cell-chip button.icon { padding: 0 3px; font-size: 13px; }
   .cell-chip button.icon.copy { color: var(--accent); font-weight: 700; }
   .cell-chip button.icon.copy:hover { color: var(--accent-contrast); background: var(--accent); }
+  /* Touch devices have no hover: keep actions visible */
+  @media (hover: none) {
+    .cell-chip .chip-actions { max-width: 60px; opacity: 1; margin-left: 2px; }
+  }
 
   .hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
@@ -736,22 +752,26 @@
             const chip = document.createElement("span");
             chip.className = "cell-chip";
             const cl = document.createElement("span");
+            cl.className = "chip-label";
             cl.textContent = t.text;
             chip.appendChild(cl);
+            const actions = document.createElement("span");
+            actions.className = "chip-actions";
             if (nextWeek) {
               const cp = document.createElement("button");
               cp.className = "icon copy";
               cp.title = "Copy to next week";
               cp.textContent = "＋";
               cp.addEventListener("click", () => assign(person.id + "|" + nextWeek.id, tid));
-              chip.appendChild(cp);
+              actions.appendChild(cp);
             }
             const rm = document.createElement("button");
             rm.className = "icon";
             rm.title = "Remove from cell";
             rm.textContent = "✕";
             rm.addEventListener("click", () => unassign(key, tid));
-            chip.appendChild(rm);
+            actions.appendChild(rm);
+            chip.appendChild(actions);
             container.appendChild(chip);
           });
         }
