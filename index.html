@@ -462,7 +462,11 @@
     return str
       .trim()
       .replace(/\s+/g, " ")
-      .replace(/[^\s-]+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+      .replace(/[^\s-]+/g, (w) => {
+        // Preserve all-caps runs (acronyms like SDK, API, V2)
+        if (/[A-Z]/.test(w) && !/[a-z]/.test(w)) return w;
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      });
   }
   const normalize = (s) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
