@@ -160,6 +160,9 @@
     cursor: grab; user-select: none;
   }
   li.task-item:active { cursor: grabbing; }
+  li.task-item.dragging { opacity: .45; }
+  li.task-item.drop-before { box-shadow: inset 0 3px 0 0 var(--accent); }
+  li.task-item.drop-after { box-shadow: inset 0 -3px 0 0 var(--accent); }
   li.task-item .grip { color: var(--muted); font-size: 12px; }
   li.task-item .label { flex: 1; word-break: break-word; }
   li.task-item.unassigned {
@@ -217,6 +220,8 @@
     padding: 3px 6px; font-size: 12.5px;
   }
   .cell-chip button.icon { padding: 0 3px; font-size: 12px; }
+  .cell-chip button.icon.copy { color: var(--accent); font-weight: 700; }
+  .cell-chip button.icon.copy:hover { color: var(--accent-contrast); background: var(--accent); }
 
   .hint { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
 
@@ -505,6 +510,25 @@
 
   // ---------- Task list rendering ----------
   const taskListEl = document.getElementById("taskList");
+  let draggingListTaskId = null; // id of a task being reordered within the left list
+
+  function clearDropMarkers() {
+    taskListEl.querySelectorAll(".drop-before, .drop-after").forEach((el) =>
+      el.classList.remove("drop-before", "drop-after"));
+  }
+
+  function reorderTask(draggedId, targetId, after) {
+    const from = state.tasks.findIndex((t) => t.id === draggedId);
+    if (from === -1) return;
+    const [moved] = state.tasks.splice(from, 1);
+    let to = state.tasks.findIndex((t) => t.id === targetId);
+    if (to === -1) { state.tasks.splice(from, 0, moved); return; }
+    if (after) to += 1;
+    state.tasks.splice(to, 0, moved);
+    save();
+    renderTasks();
+  }
+
   function renderTasks() {
     const assigned = assignedTaskIds();
     taskListEl.innerHTML = "";
@@ -538,7 +562,33 @@
       li.append(grip, label, del);
       li.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("text/plain", task.id);
-        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.effectAllowed = "copyMove";
+        draggingListTaskId = task.id;
+        li.classList.add("dragging");
+      });
+      li.addEventListener("dragend", () => {
+        draggingListTaskId = null;
+        li.classList.remove("dragging");
+        clearDropMarkers();
+      });
+      li.addEventListener("dragover", (e) => {
+        if (!draggingListTaskId || draggingListTaskId === task.id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = li.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        clearDropMarkers();
+        li.classList.add(after ? "drop-after" : "drop-before");
+      });
+      li.addEventListener("dragleave", () => {
+        li.classList.remove("drop-before", "drop-after");
+      });
+      li.addEventListener("drop", (e) => {
+        if (!draggingListTaskId || draggingListTaskId === task.id) return;
+        e.preventDefault();
+        const rect = li.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+        reorderTask(draggingListTaskId, task.id, after);
       });
       taskListEl.appendChild(li);
     });
@@ -665,12 +715,13 @@
       tr.appendChild(nameTd);
 
       // Week cells
-      state.weeks.forEach((week) => {
+      state.weeks.forEach((week, wIdx) => {
         const td = document.createElement("td");
         td.className = "drop-cell";
         const key = person.id + "|" + week.id;
         const container = document.createElement("div");
         container.className = "cell-tasks";
+        const nextWeek = state.weeks[wIdx + 1];
 
         const ids = state.assignments[key] || [];
         if (ids.length === 0) {
@@ -686,12 +737,21 @@
             chip.className = "cell-chip";
             const cl = document.createElement("span");
             cl.textContent = t.text;
+            chip.appendChild(cl);
+            if (nextWeek) {
+              const cp = document.createElement("button");
+              cp.className = "icon copy";
+              cp.title = "Copy to next week";
+              cp.textContent = "＋";
+              cp.addEventListener("click", () => assign(person.id + "|" + nextWeek.id, tid));
+              chip.appendChild(cp);
+            }
             const rm = document.createElement("button");
             rm.className = "icon";
             rm.title = "Remove from cell";
             rm.textContent = "✕";
             rm.addEventListener("click", () => unassign(key, tid));
-            chip.append(cl, rm);
+            chip.appendChild(rm);
             container.appendChild(chip);
           });
         }
