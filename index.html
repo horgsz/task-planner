@@ -336,6 +336,18 @@
     display: none;
   }
   .auth-error.show { display: block; }
+  .auth-note {
+    margin-top: 14px; color: var(--muted);
+    background: var(--panel-2); border-radius: 8px;
+    padding: 8px 10px; font-size: 13px; display: none;
+  }
+  .auth-note.show { display: block; }
+  button.linkish {
+    display: block; width: 100%; margin-top: 10px;
+    background: none; border: none; padding: 4px;
+    color: var(--accent); font-size: 13px; cursor: pointer;
+  }
+  button.linkish:hover { text-decoration: underline; filter: none; }
   #logoutBtn { margin-left: 8px; }
   .app-hidden { display: none !important; }
 </style>
@@ -350,7 +362,19 @@
       <label for="authPassword">Password</label>
       <input id="authPassword" type="password" required placeholder="••••••••" autocomplete="current-password" />
       <button type="submit" class="primary" id="authSubmit">Sign in</button>
+      <button type="button" id="forgotBtn" class="linkish">Forgot password?</button>
       <div id="authError" class="auth-error"></div>
+      <div id="authNote" class="auth-note"></div>
+    </form>
+    <form id="setPwCard" class="auth-card" autocomplete="on" style="display:none">
+      <h1>Set your password</h1>
+      <p class="sub">Choose a password to finish setting up your account.</p>
+      <label for="newPw">New password</label>
+      <input id="newPw" type="password" required minlength="6" placeholder="At least 6 characters" autocomplete="new-password" />
+      <label for="newPw2">Confirm password</label>
+      <input id="newPw2" type="password" required minlength="6" placeholder="Re-enter password" autocomplete="new-password" />
+      <button type="submit" class="primary" id="setPwSubmit">Save password</button>
+      <div id="setPwError" class="auth-error"></div>
     </form>
   </div>
 
@@ -433,6 +457,14 @@
   const SUPABASE_TABLE = "task-planner-state";
   const CLOUD_ROW_ID = 1; // single shared row holding the whole planner
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Capture invite/recovery type from the URL hash before supabase-js clears it.
+  const URL_AUTH_TYPE = (() => {
+    try {
+      const h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+      return h.get("type"); // "invite" | "recovery" | "signup" | null
+    } catch (e) { return null; }
+  })();
 
   const STORE_KEY = "weeklyTaskPlanner.v1";
   const SIMILARITY_THRESHOLD = 0.6; // soft-warning threshold
@@ -1203,6 +1235,10 @@
   // ---------- Authentication ----------
   const authOverlay = document.getElementById("authOverlay");
   const authErrorEl = document.getElementById("authError");
+  const authNoteEl = document.getElementById("authNote");
+  const loginCard = document.getElementById("authCard");
+  const setPwCard = document.getElementById("setPwCard");
+  const setPwErrorEl = document.getElementById("setPwError");
 
   function showAuthError(msg) {
     authErrorEl.textContent = msg;
@@ -1212,12 +1248,29 @@
     authErrorEl.textContent = "";
     authErrorEl.classList.remove("show");
   }
+  function showAuthNote(msg) {
+    authNoteEl.textContent = msg;
+    authNoteEl.classList.add("show");
+  }
+  function clearAuthNote() {
+    authNoteEl.textContent = "";
+    authNoteEl.classList.remove("show");
+  }
   function showLogin() {
+    loginCard.style.display = "";
+    setPwCard.style.display = "none";
     authOverlay.classList.add("open");
+  }
+  function showSetPassword() {
+    loginCard.style.display = "none";
+    setPwCard.style.display = "";
+    authOverlay.classList.add("open");
+    setTimeout(() => document.getElementById("newPw").focus(), 0);
   }
   function hideLogin() {
     authOverlay.classList.remove("open");
     clearAuthError();
+    clearAuthNote();
   }
 
   // Runs once the user is authenticated: load local cache, then reconcile with cloud.
@@ -1262,6 +1315,43 @@
     if (error) { showAuthError(error.message || "Sign in failed."); return; }
     document.getElementById("authPassword").value = "";
     startApp();
+  });
+
+  // Forgot password: email a reset link back to this app.
+  document.getElementById("forgotBtn").addEventListener("click", async () => {
+    clearAuthError();
+    clearAuthNote();
+    const email = document.getElementById("authEmail").value.trim();
+    if (!email) { showAuthError("Enter your email above first, then click Forgot password."); return; }
+    const redirectTo = location.origin + location.pathname;
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) { showAuthError(error.message || "Couldn't send reset email."); return; }
+    showAuthNote("If that email has an account, a password reset link is on its way. Open it on this device.");
+  });
+
+  // Set/replace password (used by invite and password-recovery links).
+  document.getElementById("setPwCard").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setPwErrorEl.classList.remove("show");
+    const pw = document.getElementById("newPw").value;
+    const pw2 = document.getElementById("newPw2").value;
+    if (pw.length < 6) { setPwErrorEl.textContent = "Password must be at least 6 characters."; setPwErrorEl.classList.add("show"); return; }
+    if (pw !== pw2) { setPwErrorEl.textContent = "Passwords don't match."; setPwErrorEl.classList.add("show"); return; }
+    const btn = document.getElementById("setPwSubmit");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    const { error } = await sb.auth.updateUser({ password: pw });
+    btn.disabled = false;
+    btn.textContent = "Save password";
+    if (error) { setPwErrorEl.textContent = error.message || "Couldn't set password."; setPwErrorEl.classList.add("show"); return; }
+    // Clean the token out of the URL, then enter the app.
+    history.replaceState(null, "", location.origin + location.pathname);
+    startApp();
+  });
+
+  // Supabase fires this when the user arrives via a recovery link.
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") showSetPassword();
   });
 
   document.getElementById("logoutBtn").addEventListener("click", async () => {
@@ -1363,8 +1453,13 @@
   });
 
   // ---------- Init ----------
-  // Show the app if there's already a valid session; otherwise the login screen stays up.
+  // Invite/recovery links land here with a token in the URL: let the user set a password.
+  // Otherwise, show the app if there's a valid session, or the login screen.
   (async () => {
+    if (URL_AUTH_TYPE === "invite" || URL_AUTH_TYPE === "recovery") {
+      showSetPassword();
+      return;
+    }
     const { data } = await sb.auth.getSession();
     if (data && data.session) {
       startApp();
