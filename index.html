@@ -757,12 +757,14 @@
             chip.appendChild(cl);
             const actions = document.createElement("span");
             actions.className = "chip-actions";
-            if (nextWeek) {
+            const nextKey = nextWeek ? person.id + "|" + nextWeek.id : null;
+            const nextHasTask = nextKey && (state.assignments[nextKey] || []).includes(tid);
+            if (nextWeek && !nextHasTask) {
               const cp = document.createElement("button");
               cp.className = "icon copy";
               cp.title = "Copy to next week";
               cp.textContent = "＋";
-              cp.addEventListener("click", () => assign(person.id + "|" + nextWeek.id, tid));
+              cp.addEventListener("click", () => assign(nextKey, tid));
               actions.appendChild(cp);
             }
             const rm = document.createElement("button");
