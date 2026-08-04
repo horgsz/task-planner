@@ -78,8 +78,17 @@
     padding: 20px;
     align-items: start;
   }
+  /* Full-height sticky task-list sidebar */
+  .layout aside.panel {
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+  }
   @media (max-width: 820px) {
     .layout { grid-template-columns: 1fr; }
+    .layout aside.panel { position: static; max-height: none; }
   }
 
   .panel {
@@ -148,10 +157,17 @@
     background: var(--bg); color: var(--text);
   }
   .msg { min-height: 20px; font-size: 13px; margin-bottom: 10px; }
+  .task-search-row { margin-bottom: 8px; }
+  .task-search-row input {
+    width: 100%; box-sizing: border-box;
+    font: inherit; padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text);
+  }
   .msg.error { color: var(--danger); background: var(--danger-bg); padding: 8px 10px; border-radius: 8px; }
   .msg.warn  { color: var(--warn);  background: var(--warn-bg);  padding: 8px 10px; border-radius: 8px; }
 
-  ul.task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+  ul.task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
   li.task-item {
     display: flex; align-items: center; gap: 8px;
     background: var(--chip); color: var(--chip-text);
@@ -179,7 +195,9 @@
 
   /* Grid */
   .grid-wrap { overflow-x: auto; }
-  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; }
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+  table.grid col.week-col { width: 180px; }
+  table.grid col.name-col { width: 170px; }
   table.grid th, table.grid td {
     border: 1px solid var(--border);
     padding: 0;
@@ -220,6 +238,10 @@
     padding: 6px 10px; font-size: 14px; line-height: 1.2;
     max-width: 100%;
   }
+  .cell-chip { cursor: grab; }
+  .cell-chip:active { cursor: grabbing; }
+  .cell-chip.dragging { opacity: .45; }
+  .cell-chip button.icon { cursor: pointer; }
   .cell-chip .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cell-chip .chip-actions {
     display: inline-flex; align-items: center; gap: 1px;
@@ -396,12 +418,15 @@
     <aside class="panel" aria-label="Task list">
       <div class="panel-head">
         <h2>Tasks</h2>
-        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Tasks stay in the list, so you can assign them to multiple weeks. Tasks not assigned anywhere are marked unassigned.">i</span>
+        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Tasks stay in the list, so you can assign them to multiple weeks. You can also drag a task chip from one cell to another to move it. Tasks not assigned anywhere are marked unassigned.">i</span>
       </div>
       <form id="taskForm" class="task-input-row" autocomplete="off">
         <input id="taskInput" type="text" placeholder="Add a task…" aria-label="New task" />
         <button type="submit" class="primary" title="Add task (press T to focus)">Add <kbd>T</kbd></button>
       </form>
+      <div class="task-search-row">
+        <input id="taskSearch" type="search" placeholder="Search tasks…" aria-label="Search tasks" autocomplete="off" />
+      </div>
       <div id="taskMsg" class="msg" role="status" aria-live="polite"></div>
       <ul id="taskList" class="task-list"></ul>
     </aside>
@@ -420,7 +445,8 @@
         <input id="fileInput" type="file" accept=".csv,.json,text/csv,application/json" hidden />
       </div>
       <div class="grid-wrap">
-        <table class="grid">
+        <table class="grid" id="gridTable">
+          <colgroup id="gridCols"></colgroup>
           <thead id="gridHead"></thead>
           <tbody id="gridBody"></tbody>
         </table>
@@ -558,6 +584,8 @@
 
   // ---------- Task list rendering ----------
   const taskListEl = document.getElementById("taskList");
+  const taskSearchEl = document.getElementById("taskSearch");
+  let taskSearch = ""; // current search filter (lowercased)
   let draggingListTaskId = null; // id of a task being reordered within the left list
 
   function clearDropMarkers() {
@@ -587,7 +615,21 @@
       taskListEl.appendChild(li);
       return;
     }
-    state.tasks.forEach((task) => {
+    const orderedTasks = [
+      ...state.tasks.filter((t) => !assigned.has(t.id)),
+      ...state.tasks.filter((t) => assigned.has(t.id)),
+    ];
+    const visibleTasks = taskSearch
+      ? orderedTasks.filter((t) => t.text.toLowerCase().includes(taskSearch))
+      : orderedTasks;
+    if (visibleTasks.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty-note";
+      li.textContent = "No tasks match your search.";
+      taskListEl.appendChild(li);
+      return;
+    }
+    visibleTasks.forEach((task) => {
       const li = document.createElement("li");
       li.className = "task-item" + (assigned.has(task.id) ? "" : " unassigned");
       li.draggable = true;
@@ -687,10 +729,28 @@
   // ---------- Grid rendering ----------
   const headEl = document.getElementById("gridHead");
   const bodyEl = document.getElementById("gridBody");
+  const colsEl = document.getElementById("gridCols");
+  const gridTableEl = document.getElementById("gridTable");
+  const NAME_COL_W = 170;
+  const WEEK_COL_W = 180;
+  let draggingChip = null; // { taskId, sourceKey } when moving an assigned chip between cells
 
   function taskById(id) { return state.tasks.find((t) => t.id === id); }
 
   function renderGrid() {
+    // Columns: fixed layout keeps every week column exactly equal in width.
+    colsEl.innerHTML = "";
+    const nameCol = document.createElement("col");
+    nameCol.className = "name-col";
+    colsEl.appendChild(nameCol);
+    state.weeks.forEach(() => {
+      const c = document.createElement("col");
+      c.className = "week-col";
+      colsEl.appendChild(c);
+    });
+    // Grow past the container (enabling horizontal scroll) instead of shrinking columns.
+    gridTableEl.style.minWidth = (NAME_COL_W + state.weeks.length * WEEK_COL_W) + "px";
+
     // Header
     headEl.innerHTML = "";
     const headRow = document.createElement("tr");
@@ -782,6 +842,17 @@
             if (!t) return;
             const chip = document.createElement("span");
             chip.className = "cell-chip";
+            chip.draggable = true;
+            chip.addEventListener("dragstart", (e) => {
+              e.dataTransfer.setData("text/plain", tid);
+              e.dataTransfer.effectAllowed = "move";
+              draggingChip = { taskId: tid, sourceKey: key };
+              chip.classList.add("dragging");
+            });
+            chip.addEventListener("dragend", () => {
+              draggingChip = null;
+              chip.classList.remove("dragging");
+            });
             const cl = document.createElement("span");
             cl.className = "chip-label";
             cl.textContent = t.text;
@@ -810,11 +881,16 @@
         }
 
         td.appendChild(container);
-        td.addEventListener("dragover", (e) => { e.preventDefault(); td.classList.add("drag-over"); e.dataTransfer.dropEffect = "copy"; });
+        td.addEventListener("dragover", (e) => { e.preventDefault(); td.classList.add("drag-over"); e.dataTransfer.dropEffect = draggingChip ? "move" : "copy"; });
         td.addEventListener("dragleave", () => td.classList.remove("drag-over"));
         td.addEventListener("drop", (e) => {
           e.preventDefault();
           td.classList.remove("drag-over");
+          if (draggingChip) {
+            const { taskId, sourceKey } = draggingChip;
+            if (sourceKey !== key) moveAssignment(sourceKey, key, taskId);
+            return;
+          }
           const taskId = e.dataTransfer.getData("text/plain");
           if (taskId) assign(key, taskId);
         });
@@ -839,6 +915,17 @@
     if (!state.assignments[key]) return;
     state.assignments[key] = state.assignments[key].filter((id) => id !== taskId);
     if (state.assignments[key].length === 0) delete state.assignments[key];
+    save();
+    render();
+  }
+  function moveAssignment(fromKey, toKey, taskId) {
+    if (!taskById(taskId)) return;
+    if (fromKey === toKey) return;
+    if (!state.assignments[fromKey] || !state.assignments[fromKey].includes(taskId)) return;
+    state.assignments[fromKey] = state.assignments[fromKey].filter((id) => id !== taskId);
+    if (state.assignments[fromKey].length === 0) delete state.assignments[fromKey];
+    if (!state.assignments[toKey]) state.assignments[toKey] = [];
+    if (!state.assignments[toKey].includes(taskId)) state.assignments[toKey].push(taskId);
     save();
     render();
   }
@@ -1374,6 +1461,10 @@
     addTask(input.value);
     if (!msgEl.classList.contains("error")) input.value = "";
     input.focus();
+  });
+  taskSearchEl.addEventListener("input", () => {
+    taskSearch = taskSearchEl.value.trim().toLowerCase();
+    renderTasks();
   });
   document.getElementById("addPerson").addEventListener("click", addPerson);
   document.getElementById("addWeek").addEventListener("click", addWeek);
