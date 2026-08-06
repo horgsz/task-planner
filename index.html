@@ -180,7 +180,7 @@
   li.task-item.drop-before { box-shadow: inset 0 3px 0 0 var(--accent); }
   li.task-item.drop-after { box-shadow: inset 0 -3px 0 0 var(--accent); }
   li.task-item .grip { color: var(--muted); font-size: 12px; }
-  li.task-item .label { flex: 1; word-break: break-word; }
+  li.task-item .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   li.task-item button.edit { color: var(--muted); }
   li.task-item button.edit:hover { color: var(--accent-contrast); background: var(--accent); }
   li.task-item input.task-edit {
@@ -696,6 +696,7 @@
       const label = document.createElement("span");
       label.className = "label";
       label.textContent = task.text;
+      label.title = task.text;
 
       const edit = document.createElement("button");
       edit.className = "icon edit";
