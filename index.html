@@ -181,6 +181,17 @@
   li.task-item.drop-after { box-shadow: inset 0 -3px 0 0 var(--accent); }
   li.task-item .grip { color: var(--muted); font-size: 12px; }
   li.task-item .label { flex: 1; word-break: break-word; }
+  li.task-item button.edit { color: var(--muted); }
+  li.task-item button.edit:hover { color: var(--accent-contrast); background: var(--accent); }
+  li.task-item input.task-edit {
+    flex: 1; min-width: 0;
+    font: inherit; color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--accent); border-radius: 6px;
+    padding: 3px 6px;
+    cursor: text; user-select: text;
+  }
+  li.task-item input.task-edit:focus { outline: none; }
   li.task-item.unassigned {
     background: var(--unassigned-bg);
     border-color: var(--unassigned-border);
@@ -453,7 +464,7 @@
     <aside class="panel" aria-label="Task list">
       <div class="panel-head">
         <h2>Tasks</h2>
-        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Tasks stay in the list, so you can assign them to multiple weeks. You can also drag a task chip from one cell to another to move it. Tasks not assigned anywhere are marked unassigned.">i</span>
+        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Double-click a task (or use ✎) to rename it. Tasks stay in the list, so you can assign them to multiple weeks. You can also drag a task chip from one cell to another to move it. Tasks not assigned anywhere are marked unassigned.">i</span>
       </div>
       <form id="taskForm" class="task-input-row" autocomplete="off">
         <input id="taskInput" type="text" placeholder="Add a task…" aria-label="New task" />
@@ -686,13 +697,24 @@
       label.className = "label";
       label.textContent = task.text;
 
+      const edit = document.createElement("button");
+      edit.className = "icon edit";
+      edit.title = "Rename task";
+      edit.setAttribute("aria-label", "Rename task");
+      edit.textContent = "✎";
+      edit.addEventListener("click", () => beginEditTask(li, label, task));
+
       const del = document.createElement("button");
       del.className = "icon";
       del.title = "Remove task";
       del.textContent = "✕";
       del.addEventListener("click", () => removeTask(task.id));
 
-      li.append(grip, label, del);
+      li.append(grip, label, edit, del);
+      li.addEventListener("dblclick", (e) => {
+        if (e.target.closest("button")) return;
+        beginEditTask(li, label, task);
+      });
       li.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("text/plain", task.id);
         e.dataTransfer.effectAllowed = "copyMove";
@@ -756,6 +778,69 @@
     }
     save();
     renderTasks();
+  }
+
+  // Swap a task's label for an inline input. Enter/blur commits, Escape cancels.
+  function beginEditTask(li, label, task) {
+    if (li.querySelector("input.task-edit")) return;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "task-edit";
+    input.value = task.text;
+    input.setAttribute("aria-label", "Rename task");
+    // Dragging must be off while editing, or the item drags instead of selecting text.
+    li.draggable = false;
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let settled = false;
+    const finish = (commit) => {
+      if (settled) return;
+      settled = true;
+      li.draggable = true;
+      if (commit) renameTask(task.id, input.value);
+      else render();
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  function renameTask(taskId, rawText) {
+    const task = taskById(taskId);
+    if (!task) { render(); return; }
+    const text = rawText.trim();
+    // Blank or unchanged: leave the task as it was.
+    if (!text || text === task.text) { render(); return; }
+    const norm = normalize(text);
+
+    // Exact duplicate of another task -> block, same rule as adding.
+    const clash = state.tasks.find((t) => t.id !== taskId && normalize(t.text) === norm);
+    if (clash) {
+      showMsg("error", `“${clash.text}” is already in the list. Duplicate tasks aren’t allowed.`);
+      render();
+      return;
+    }
+
+    // Similar (but not exact) -> soft warning, still rename.
+    let closest = null, closestScore = 0;
+    for (const t of state.tasks) {
+      if (t.id === taskId) continue;
+      const score = similarity(norm, normalize(t.text));
+      if (score > closestScore) { closestScore = score; closest = t; }
+    }
+
+    task.text = text;
+    if (closest && closestScore >= SIMILARITY_THRESHOLD) {
+      showMsg("warn", `Renamed, but heads up: this looks similar to “${closest.text}”.`);
+    } else {
+      showMsg("", "");
+    }
+    save();
+    render();
   }
 
   function removeTask(taskId) {
