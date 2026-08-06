@@ -310,6 +310,41 @@
     font-size: 12.5px; color: var(--muted);
     align-self: center; margin-left: 4px; white-space: nowrap;
   }
+
+  /* Undo toast */
+  .undo-toast {
+    position: fixed; left: 50%; top: 16px;
+    transform: translate(-50%, -12px);
+    display: flex; align-items: center; gap: 14px;
+    width: max-content; max-width: min(94vw, 620px);
+    padding: 14px 14px 16px 18px;
+    background: var(--warn-bg); color: var(--warn);
+    border: 2px solid var(--warn); border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+    font-size: 15px; font-weight: 600;
+    z-index: 90; overflow: hidden;
+    opacity: 0; visibility: hidden;
+    transition: opacity .16s ease, transform .16s ease, visibility .16s;
+  }
+  .undo-toast.open { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+  .undo-toast .undo-icon { font-size: 20px; line-height: 1; flex: 0 0 auto; }
+  .undo-toast .undo-text { flex: 1 1 auto; word-break: break-word; }
+  .undo-toast button { flex: 0 0 auto; }
+  .undo-toast button.primary {
+    background: var(--warn); color: var(--warn-bg);
+    border-color: transparent; font-weight: 700;
+    padding: 8px 18px; font-size: 14px;
+  }
+  .undo-toast button.icon { color: var(--warn); font-size: 15px; }
+  .undo-toast button.icon:hover { color: var(--warn-bg); background: var(--warn); }
+  /* Countdown bar along the lower edge, shrinking as the undo window expires. */
+  .undo-progress {
+    position: absolute; left: 0; bottom: 0;
+    height: 5px; width: 100%;
+    background: var(--warn); opacity: .55;
+  }
+  .undo-progress.run { animation: undo-countdown var(--undo-ms, 6000ms) linear forwards; }
+  @keyframes undo-countdown { from { width: 100%; } to { width: 0%; } }
   .sync-status.ok { color: #16a34a; }
   .sync-status.err { color: var(--danger); }
 
@@ -470,6 +505,14 @@
         <button id="importConfirm" class="danger">Overwrite everything</button>
       </div>
     </div>
+  </div>
+
+  <div id="undoToast" class="undo-toast" role="status" aria-live="polite">
+    <span class="undo-icon" aria-hidden="true">⚠️</span>
+    <span class="undo-text" id="undoToastText"></span>
+    <button id="undoBtn" class="primary">Undo</button>
+    <button id="undoDismiss" class="icon" title="Dismiss" aria-label="Dismiss">✕</button>
+    <span class="undo-progress" id="undoProgress" aria-hidden="true"></span>
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -716,6 +759,9 @@
   }
 
   function removeTask(taskId) {
+    const task = taskById(taskId);
+    if (!task) return;
+    const snapshot = snapshotData();
     state.tasks = state.tasks.filter((t) => t.id !== taskId);
     Object.keys(state.assignments).forEach((k) => {
       state.assignments[k] = state.assignments[k].filter((id) => id !== taskId);
@@ -724,6 +770,7 @@
     showMsg("", "");
     save();
     render();
+    offerUndo("Removed “" + task.text + "”", snapshot);
   }
 
   // ---------- Grid rendering ----------
@@ -901,6 +948,59 @@
     });
   }
 
+  // ---------- Undo ----------
+  const undoToastEl = document.getElementById("undoToast");
+  const undoToastTextEl = document.getElementById("undoToastText");
+  const undoProgressEl = document.getElementById("undoProgress");
+  const UNDO_TIMEOUT_MS = 6000;
+  let pendingUndo = null; // { snapshot } for the most recent destructive action
+  let undoTimer = null;
+
+  undoToastEl.style.setProperty("--undo-ms", UNDO_TIMEOUT_MS + "ms");
+
+  // Clone only the shared board data; theme is a personal preference and is left alone.
+  function snapshotData() {
+    return JSON.parse(JSON.stringify({
+      people: state.people,
+      weeks: state.weeks,
+      tasks: state.tasks,
+      assignments: state.assignments,
+    }));
+  }
+
+  function hideUndoToast() {
+    clearTimeout(undoTimer);
+    undoTimer = null;
+    pendingUndo = null;
+    undoToastEl.classList.remove("open");
+    undoProgressEl.classList.remove("run");
+  }
+
+  function offerUndo(label, snapshot) {
+    pendingUndo = { snapshot: snapshot };
+    undoToastTextEl.textContent = label;
+    undoToastEl.classList.add("open");
+    // Restart the countdown bar even if the toast is already showing.
+    undoProgressEl.classList.remove("run");
+    void undoProgressEl.offsetWidth;
+    undoProgressEl.classList.add("run");
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(hideUndoToast, UNDO_TIMEOUT_MS);
+  }
+
+  function performUndo() {
+    if (!pendingUndo) return;
+    const snap = pendingUndo.snapshot;
+    hideUndoToast();
+    state.people = snap.people;
+    state.weeks = snap.weeks;
+    state.tasks = snap.tasks;
+    state.assignments = snap.assignments;
+    showMsg("", "");
+    save();
+    render();
+  }
+
   // ---------- Mutations ----------
   function assign(key, taskId) {
     if (!taskById(taskId)) return;
@@ -938,10 +1038,14 @@
     if (last) { last.focus(); last.select(); }
   }
   function removePerson(id) {
+    const person = state.people.find((p) => p.id === id);
+    if (!person) return;
+    const snapshot = snapshotData();
     state.people = state.people.filter((p) => p.id !== id);
     Object.keys(state.assignments).forEach((k) => { if (k.startsWith(id + "|")) delete state.assignments[k]; });
     save();
     render();
+    offerUndo("Removed “" + (person.name || "Unnamed person") + "”", snapshot);
   }
   function addWeek() {
     state.weeks.push({ id: uid() });
@@ -949,10 +1053,14 @@
     renderGrid();
   }
   function removeWeek(id) {
+    const idx = state.weeks.findIndex((w) => w.id === id);
+    if (idx === -1) return;
+    const snapshot = snapshotData();
     state.weeks = state.weeks.filter((w) => w.id !== id);
     Object.keys(state.assignments).forEach((k) => { if (k.endsWith("|" + id)) delete state.assignments[k]; });
     save();
     render();
+    offerUndo("Removed Week " + (idx + 1), snapshot);
   }
 
   // ---------- Theme ----------
@@ -1305,6 +1413,7 @@
       if (cloud) {
         state = cloud;
         state.assignments = state.assignments || {};
+        hideUndoToast();
         try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
         applyTheme();
         render();
@@ -1466,6 +1575,8 @@
     taskSearch = taskSearchEl.value.trim().toLowerCase();
     renderTasks();
   });
+  document.getElementById("undoBtn").addEventListener("click", performUndo);
+  document.getElementById("undoDismiss").addEventListener("click", hideUndoToast);
   document.getElementById("addPerson").addEventListener("click", addPerson);
   document.getElementById("addWeek").addEventListener("click", addWeek);
 
@@ -1493,6 +1604,14 @@
   document.addEventListener("keydown", (e) => {
     // Ignore while signed out, typing in a field, using modifiers, or with a modal open.
     if (authOverlay.classList.contains("open")) return;
+    // Cmd/Ctrl+Z undoes the last destructive action while the toast is showing.
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+      if (pendingUndo && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        performUndo();
+      }
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (isTypingTarget(e.target)) return;
     if (importModal.classList.contains("open")) return;
@@ -1523,6 +1642,7 @@
   function applyImport(newState) {
     state = newState;
     state.assignments = state.assignments || {};
+    hideUndoToast();
     closeImportModal();
     showMsg("", "");
     save();
