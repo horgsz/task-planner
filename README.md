@@ -71,7 +71,7 @@ of changes are combined non-destructively.
 - **People × Weeks grid** — rows are people, columns are weeks. Add/remove either.
 - **Editable names** — the first column holds editable name fields, auto-formatted to Title Case.
 - **Auto-numbered weeks** — new columns become "Week 1", "Week 2", … and renumber when one is removed.
-- **Task list** — add/remove tasks, and rename one in place by double-clicking it (or clicking ✎).
+- **Task list** — add/remove tasks, and rename one in place by double-clicking it.
   - Exact duplicates are blocked with a clear **error**.
   - Near-duplicates (similar wording) are still added but show a softer **warning**.
   - The same duplicate rules apply when renaming. Renaming keeps a task's existing

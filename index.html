@@ -181,8 +181,6 @@
   li.task-item.drop-after { box-shadow: inset 0 -3px 0 0 var(--accent); }
   li.task-item .grip { color: var(--muted); font-size: 12px; }
   li.task-item .label { flex: 1; white-space: nowrap; }
-  li.task-item button.edit { color: var(--muted); }
-  li.task-item button.edit:hover { color: var(--accent-contrast); background: var(--accent); }
   li.task-item input.task-edit {
     flex: 1; min-width: 0;
     font: inherit; color: var(--text);
@@ -196,11 +194,6 @@
     background: var(--unassigned-bg);
     border-color: var(--unassigned-border);
     border-style: dashed;
-  }
-  li.task-item.unassigned::after {
-    content: "unassigned";
-    font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--unassigned-border); font-weight: 700;
   }
   .empty-note { color: var(--muted); font-size: 13px; font-style: italic; }
 
@@ -464,7 +457,7 @@
     <aside class="panel" aria-label="Task list">
       <div class="panel-head">
         <h2>Tasks</h2>
-        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Double-click a task (or use ✎) to rename it. Tasks stay in the list, so you can assign them to multiple weeks. You can also drag a task chip from one cell to another to move it. Tasks not assigned anywhere are marked unassigned.">i</span>
+        <span class="info-tip" tabindex="0" role="note" aria-label="Tasks help" data-tip="Drag a task into any cell. Double-click a task to rename it. Tasks stay in the list, so you can assign them to multiple weeks. You can also drag a task chip from one cell to another to move it. Tasks not assigned anywhere are shown with a dashed orange outline.">i</span>
       </div>
       <form id="taskForm" class="task-input-row" autocomplete="off">
         <input id="taskInput" type="text" placeholder="Add a task…" aria-label="New task" />
@@ -698,20 +691,13 @@
       label.textContent = task.text;
       label.title = task.text;
 
-      const edit = document.createElement("button");
-      edit.className = "icon edit";
-      edit.title = "Rename task";
-      edit.setAttribute("aria-label", "Rename task");
-      edit.textContent = "✎";
-      edit.addEventListener("click", () => beginEditTask(li, label, task));
-
       const del = document.createElement("button");
       del.className = "icon";
       del.title = "Remove task";
       del.textContent = "✕";
       del.addEventListener("click", () => removeTask(task.id));
 
-      li.append(grip, label, edit, del);
+      li.append(grip, label, del);
       li.addEventListener("dblclick", (e) => {
         if (e.target.closest("button")) return;
         beginEditTask(li, label, task);
